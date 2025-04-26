@@ -1,7 +1,7 @@
 /* 
   Smart Watch para M5StickCPlus2
+  Versão: 1.0 (Ajustes Finais)
   Autor: Bruno Nepomuceno
-  Versão: 1.0
   Data: 05/2025
 */
 
@@ -22,9 +22,6 @@ const int AJUSTE_VERAO = 0;
 #define BRILHO_DIURNO 100
 #define BRILHO_NOTURNO 30
 
-// Pinos e configurações de hardware
-#define BOTAO_A 37  // GPIO37 para o botão A
-
 // =========== VARIÁVEIS GLOBAIS ===========
 uint8_t brilho_atual = BRILHO_DIURNO;
 bool modo_noturno = false;
@@ -32,13 +29,12 @@ unsigned long ultimo_update_bateria = 0;
 
 // =========== CONFIGURAÇÃO INICIAL ===========
 void setup() {
-  auto cfg = M5.config();  // Configuração padrão do dispositivo
+  auto cfg = M5.config();
   M5.begin(cfg);
   
   // Configurações de energia
-  M5.Power.setBatteryCharge(true);  // Habilita carregamento
-  setCpuFrequencyMhz(80);           // Reduz clock para 80MHz
-  WiFi.setSleep(WIFI_PS_MIN_MODEM); // WiFi em modo low-power
+  setCpuFrequencyMhz(80);
+  WiFi.setSleep(WIFI_PS_MIN_MODEM);
 
   // Configuração da tela
   M5.Display.setRotation(3);
@@ -58,11 +54,12 @@ void conectar_wifi() {
     delay(500);
     M5.Display.print(".");
   }
+  M5.Display.println("\nConectado!");
 }
 
 void configurar_ntp() {
   configTime(FUSO_HORARIO, AJUSTE_VERAO, SERVIDOR_NTP);
-  delay(1000);  // Espera sincronização inicial
+  delay(1000);
 }
 
 // =========== LOOP PRINCIPAL ===========
@@ -100,45 +97,39 @@ void atualizar_bateria() {
   }
 }
 
+// =========== FUNÇÕES DE TELA (COM AJUSTES SOLICITADOS) ===========
 void desenhar_bateria() {
   int nivel = M5.Power.getBatteryLevel();
-  bool carregando = M5.Power.isCharging();
   
-  int x = 135;
+  // Posição ajustada conforme solicitado (x=150)
+  int x = 150;
   int y = 5;
   uint16_t cor = TFT_GREEN;
   if (nivel <= 20) cor = TFT_RED;
   else if (nivel <= 50) cor = TFT_YELLOW;
 
-  // Desenha ícone de bateria
-  M5.Display.drawRect(x, y, 40, 20, TFT_WHITE);
-  M5.Display.fillRect(x+40, y+6, 3, 8, TFT_WHITE);
-  M5.Display.fillRect(x+2, y+2, map(nivel, 0, 100, 0, 36), 16, cor);
+  // Ícone de bateria (tamanho otimizado)
+  M5.Display.drawRect(x, y, 25, 12, TFT_WHITE);
+  M5.Display.fillRect(x+25, y+3, 2, 6, TFT_WHITE);
+  M5.Display.fillRect(x+2, y+2, map(nivel, 0, 100, 0, 21), 8, cor);
 
-  // Ícone de carregamento
-  if (carregando) {
-    M5.Display.setTextColor(TFT_BLACK, cor);
-    M5.Display.drawString("+", x+16, y+5);
-  }
-
-  // Texto de porcentagem
+  // Texto de porcentagem (afastado 30px do ícone)
   M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5.Display.drawString(String(nivel) + "%", x+44, y+5);
+  M5.Display.drawString(String(nivel) + "%", x+30, y+1);
 }
 
-// =========== FUNÇÕES DE TELA ===========
 void atualizar_tela(struct tm &tempo) {
   M5.Display.fillScreen(TFT_BLACK);
   
-  // Hora
+  // Hora (centralizada)
   M5.Display.setTextSize(3);
-  M5.Display.setCursor(10, 30);
+  M5.Display.setCursor(20, 35);
   M5.Display.setTextColor(modo_noturno ? TFT_GREENYELLOW : TFT_GREEN, TFT_BLACK);
   M5.Display.printf("%02d:%02d:%02d", tempo.tm_hour, tempo.tm_min, tempo.tm_sec);
 
-  // Data
+  // Data (com ajuste solicitado Y=80)
   M5.Display.setTextSize(2);
-  M5.Display.setCursor(10, 85);
+  M5.Display.setCursor(20, 80);  // Ajuste específico para Y=80
   M5.Display.setTextColor(modo_noturno ? TFT_CYAN : TFT_BLUE, TFT_BLACK);
   M5.Display.printf("%02d/%02d/%04d", tempo.tm_mday, tempo.tm_mon + 1, tempo.tm_year + 1900);
 
@@ -160,6 +151,7 @@ void controle_brilho() {
     brilho_atual = (brilho_atual + 50) % 255;
     M5.Display.setBrightness(brilho_atual);
     
+    // Feedback visual
     M5.Display.fillRect(0, 0, 30, 10, TFT_BLACK);
     M5.Display.drawString(String((brilho_atual*100)/255) + "%", 0, 0);
     delay(1000);
