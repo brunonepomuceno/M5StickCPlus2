@@ -1,159 +1,205 @@
-/* 
-  Smart Watch para M5StickCPlus2
-  Versão: 1.0 (Ajustes Finais)
-  Autor: Bruno Nepomuceno
-  Data: 05/2025
-*/
-
 #include <M5StickCPlus2.h>
-#include <WiFi.h>
-#include <time.h>
 
-// =========== CONSTANTES ===========
-const char* SSID = "ELDORADO";
-const char* SENHA = "G4solinaneles";
-const char* SERVIDOR_NTP = "br.pool.ntp.org";
-const long FUSO_HORARIO = -3 * 3600;
-const int AJUSTE_VERAO = 0;
+// Paleta Cyberpunk 2077
+#define GLITCH_RED 0xF800
+#define MATRIX_GREEN 0x07E0
+#define DEEP_BLUE 0x0015
+#define NEON_PURPLE 0x780F
+#define TERMINAL_CYAN 0x07FF
 
-// Configurações de modo noturno
-#define HORA_INICIO_NOTURNO 18
-#define HORA_FIM_NOTURNO 6
-#define BRILHO_DIURNO 100
-#define BRILHO_NOTURNO 30
+// Variáveis de estado
+bool overclockMode = false;
+int netwatchCounter = 0;
+unsigned long lastGlitch = 0;
+bool blinkState = false;
 
-// =========== VARIÁVEIS GLOBAIS ===========
-uint8_t brilho_atual = BRILHO_DIURNO;
-bool modo_noturno = false;
-unsigned long ultimo_update_bateria = 0;
+void playHackerSound() {
+  StickCP2.Speaker.tone(1200, 80);
+  delay(50);
+  StickCP2.Speaker.tone(900, 60);
+  delay(30);
+  StickCP2.Speaker.tone(1500, 40);
+  StickCP2.Speaker.end();
+}
 
-// =========== CONFIGURAÇÃO INICIAL ===========
+void glitchEffect() {
+  for (int i = 0; i < 3; i++) {
+    M5.Lcd.fillScreen(random(2) ? GLITCH_RED : NEON_PURPLE);
+    playHackerSound();
+    delay(30 + random(70));
+    M5.Lcd.fillScreen(TFT_BLACK);
+    delay(20);
+  }
+}
+
+void typeWriter(String text, uint16_t color, int delayTime = 80) {
+  M5.Lcd.setTextColor(color);
+  for (int i = 0; i < text.length(); i++) {
+    M5.Lcd.print(text.charAt(i));
+    if (text.charAt(i) != ' ') {
+      StickCP2.Speaker.tone(800 + (i * 30), 20);
+      StickCP2.Speaker.end();
+    }
+    delay(delayTime + random(40));
+  }
+}
+
+void drawTerminalHeader() {
+  M5.Lcd.setTextColor(MATRIX_GREEN);
+  M5.Lcd.println("[bl4k.code@root:~] $>_");
+  M5.Lcd.drawFastHLine(0, 15, M5.Lcd.width(), TERMINAL_CYAN);
+}
+
+void scanlineBootEffect() {
+  for (int i = 0; i < M5.Lcd.width(); i += 3) {
+    M5.Lcd.drawFastVLine(i, 0, M5.Lcd.height(), MATRIX_GREEN);
+    delay(10);
+  }
+  M5.Lcd.fillScreen(TFT_BLACK);
+}
+
+void bootAnimation() {
+  M5.Lcd.setTextFont(1);
+  M5.Lcd.setTextSize(1);
+  
+  typeWriter("> Initializing blackICE protocol...\n", TERMINAL_CYAN);
+  typeWriter("> Bypassing Arasaka firewalls...\n", NEON_PURPLE);
+  typeWriter("> WARNING: NetWatch detected\n", GLITCH_RED);
+  typeWriter("> Access granted: ROOT privileges\n", MATRIX_GREEN);
+  
+  glitchEffect();
+  scanlineBootEffect();
+}
+
+void drawCyberCursor() {
+  blinkState = !blinkState;
+  M5.Lcd.setTextColor(blinkState ? MATRIX_GREEN : TFT_BLACK);
+  M5.Lcd.print("_");
+}
+
+void checkNetwatchEasterEgg() {
+  netwatchCounter++;
+  if (netwatchCounter >= 3) {
+    M5.Lcd.fillScreen(DEEP_BLUE);
+    M5.Lcd.setTextColor(GLITCH_RED);
+    M5.Lcd.setCursor(0, 10);
+    typeWriter("> NETWATCH TRACE DETECTED!\n", GLITCH_RED);
+    typeWriter("> ACTIVATING ICEPHAGE...\n", NEON_PURPLE);
+    
+    for (int i = 0; i < 5; i++) {
+      M5.Lcd.fillRect(0, 40, M5.Lcd.width(), 10, GLITCH_RED);
+      StickCP2.Speaker.tone(2000, 100);
+      delay(100);
+      M5.Lcd.fillRect(0, 40, M5.Lcd.width(), 10, DEEP_BLUE);
+      StickCP2.Speaker.end();
+      delay(100);
+    }
+    
+    netwatchCounter = 0;
+    drawMainUI();
+  }
+}
+
+void drawBatteryStatus() {
+  int batteryLevel = M5.Power.getBatteryLevel();
+  M5.Lcd.setTextColor(batteryLevel > 30 ? MATRIX_GREEN : GLITCH_RED);
+  M5.Lcd.setCursor(5, 60);
+  M5.Lcd.printf("POWER: %d%% [%s]", batteryLevel, 
+               M5.Power.isCharging() ? "CHARGING" : "DISCHARGING");
+  
+  // Barra de bateria estilizada
+  int barWidth = map(batteryLevel, 0, 100, 0, 50);
+  M5.Lcd.drawRect(60, 60, 52, 8, TERMINAL_CYAN);
+  M5.Lcd.fillRect(62, 62, barWidth, 4, 
+                 batteryLevel > 30 ? MATRIX_GREEN : GLITCH_RED);
+}
+
+void drawMainUI() {
+  M5.Lcd.fillScreen(TFT_BLACK);
+  drawTerminalHeader();
+  
+  // Nome principal
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(NEON_PURPLE);
+  M5.Lcd.setCursor(5, 25);
+  M5.Lcd.println("bl4k.code");
+  
+  // Status do sistema
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(MATRIX_GREEN);
+  M5.Lcd.setCursor(5, 45);
+  M5.Lcd.printf("System: %s", overclockMode ? "OVERCLOCKED" : "STEALTH");
+  
+  // Informações de hardware
+  drawBatteryStatus();
+  
+  // Barra de status
+  M5.Lcd.fillRect(0, M5.Lcd.height() - 20, M5.Lcd.width(), 2, TERMINAL_CYAN);
+  
+  // Relógio e assinatura
+  M5.Lcd.setTextColor(TERMINAL_CYAN);
+  M5.Lcd.setCursor(5, M5.Lcd.height() - 15);
+  M5.Lcd.printf("%02d:%02d:%02d", 
+    M5.Rtc.getTime().hours, 
+    M5.Rtc.getTime().minutes,
+    M5.Rtc.getTime().seconds);
+  
+  M5.Lcd.setTextColor(NEON_PURPLE);
+  M5.Lcd.setCursor(M5.Lcd.width() - 60, M5.Lcd.height() - 15);
+  M5.Lcd.print("0xFA7E3C");
+}
+
 void setup() {
   auto cfg = M5.config();
-  M5.begin(cfg);
+  StickCP2.begin(cfg);
+  M5.Lcd.setRotation(3);
+  M5.Lcd.fillScreen(TFT_BLACK);
+  M5.Lcd.setTextFont(1);
+  M5.Lcd.setTextSize(1);
   
-  // Configurações de energia
-  setCpuFrequencyMhz(80);
-  WiFi.setSleep(WIFI_PS_MIN_MODEM);
-
-  // Configuração da tela
-  M5.Display.setRotation(3);
-  M5.Display.setBrightness(brilho_atual);
-  M5.Display.fillScreen(TFT_BLACK);
-
-  // Conexão WiFi temporária
-  conectar_wifi();
-  configurar_ntp();
-  WiFi.disconnect(true);
+  playHackerSound();
+  bootAnimation();
+  drawMainUI();
 }
 
-void conectar_wifi() {
-  WiFi.begin(SSID, SENHA);
-  M5.Display.print("Conectando...");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    M5.Display.print(".");
-  }
-  M5.Display.println("\nConectado!");
-}
-
-void configurar_ntp() {
-  configTime(FUSO_HORARIO, AJUSTE_VERAO, SERVIDOR_NTP);
-  delay(1000);
-}
-
-// =========== LOOP PRINCIPAL ===========
 void loop() {
-  struct tm info_tempo;
-  
-  if (!getLocalTime(&info_tempo)) {
-    tela_erro();
-    return;
-  }
-
-  verificar_modo_noturno(info_tempo);
-  atualizar_tela(info_tempo);
-  controle_brilho();
-  atualizar_bateria();
-
-  delay(1000);
-}
-
-// =========== FUNÇÕES DE ENERGIA ===========
-void verificar_modo_noturno(struct tm &tempo) {
-  bool novo_modo = (tempo.tm_hour >= HORA_INICIO_NOTURNO || tempo.tm_hour < HORA_FIM_NOTURNO);
-  
-  if (novo_modo != modo_noturno) {
-    modo_noturno = novo_modo;
-    brilho_atual = modo_noturno ? BRILHO_NOTURNO : BRILHO_DIURNO;
-    M5.Display.setBrightness(brilho_atual);
-  }
-}
-
-void atualizar_bateria() {
-  if (millis() - ultimo_update_bateria > 10000) {
-    desenhar_bateria();
-    ultimo_update_bateria = millis();
-  }
-}
-
-// =========== FUNÇÕES DE TELA (COM AJUSTES SOLICITADOS) ===========
-void desenhar_bateria() {
-  int nivel = M5.Power.getBatteryLevel();
-  
-  // Posição ajustada conforme solicitado (x=150)
-  int x = 150;
-  int y = 5;
-  uint16_t cor = TFT_GREEN;
-  if (nivel <= 20) cor = TFT_RED;
-  else if (nivel <= 50) cor = TFT_YELLOW;
-
-  // Ícone de bateria (tamanho otimizado)
-  M5.Display.drawRect(x, y, 25, 12, TFT_WHITE);
-  M5.Display.fillRect(x+25, y+3, 2, 6, TFT_WHITE);
-  M5.Display.fillRect(x+2, y+2, map(nivel, 0, 100, 0, 21), 8, cor);
-
-  // Texto de porcentagem (afastado 30px do ícone)
-  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5.Display.drawString(String(nivel) + "%", x+30, y+1);
-}
-
-void atualizar_tela(struct tm &tempo) {
-  M5.Display.fillScreen(TFT_BLACK);
-  
-  // Hora (centralizada)
-  M5.Display.setTextSize(3);
-  M5.Display.setCursor(20, 35);
-  M5.Display.setTextColor(modo_noturno ? TFT_GREENYELLOW : TFT_GREEN, TFT_BLACK);
-  M5.Display.printf("%02d:%02d:%02d", tempo.tm_hour, tempo.tm_min, tempo.tm_sec);
-
-  // Data (com ajuste solicitado Y=80)
-  M5.Display.setTextSize(2);
-  M5.Display.setCursor(20, 80);  // Ajuste específico para Y=80
-  M5.Display.setTextColor(modo_noturno ? TFT_CYAN : TFT_BLUE, TFT_BLACK);
-  M5.Display.printf("%02d/%02d/%04d", tempo.tm_mday, tempo.tm_mon + 1, tempo.tm_year + 1900);
-
-  desenhar_bateria();
-}
-
-// =========== FUNÇÕES AUXILIARES ===========
-void tela_erro() {
-  M5.Display.fillScreen(TFT_RED);
-  M5.Display.drawString("Erro NTP!", 10, 50);
-  delay(2000);
-  ESP.restart();
-}
-
-void controle_brilho() {
   M5.update();
   
+  // Efeitos aleatórios
+  if (millis() - lastGlitch > 20000 && random(100) > 90) {
+    glitchEffect();
+    drawMainUI();
+    lastGlitch = millis();
+  }
+  
+  // Controles
   if (M5.BtnA.wasPressed()) {
-    brilho_atual = (brilho_atual + 50) % 255;
-    M5.Display.setBrightness(brilho_atual);
+    glitchEffect();
+    drawMainUI();
+  }
+  
+  if (M5.BtnB.wasPressed()) {
+    checkNetwatchEasterEgg();
+  }
+  
+  if (M5.BtnB.pressedFor(800)) {
+    overclockMode = !overclockMode;
+    M5.Lcd.setBrightness(overclockMode ? 100 : 50);
+    drawMainUI();
+  }
+  
+  // Atualização dinâmica
+  static uint32_t lastUpdate = 0;
+  if (millis() - lastUpdate > 500) {
+    // Cursor piscante
+    M5.Lcd.setCursor(M5.Lcd.width() - 10, 0);
+    drawCyberCursor();
     
-    // Feedback visual
-    M5.Display.fillRect(0, 0, 30, 10, TFT_BLACK);
-    M5.Display.drawString(String((brilho_atual*100)/255) + "%", 0, 0);
-    delay(1000);
+    // Atualiza a cada segundo
+    if (millis() - lastUpdate > 1000) {
+      drawMainUI();
+    }
+    
+    lastUpdate = millis();
   }
 }
