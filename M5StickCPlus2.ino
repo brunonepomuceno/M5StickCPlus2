@@ -6,19 +6,18 @@
 #define DEEP_BLUE 0x0015
 #define NEON_PURPLE 0x780F
 #define TERMINAL_CYAN 0x07FF
+#define WARNING_YELLOW 0xFFE0
 
 // Variáveis de estado
 bool overclockMode = false;
 int netwatchCounter = 0;
 unsigned long lastGlitch = 0;
 bool blinkState = false;
+bool lowBatteryWarningShown = false;
 
-void playHackerSound() {
-  StickCP2.Speaker.tone(1200, 80);
-  delay(50);
-  StickCP2.Speaker.tone(900, 60);
-  delay(30);
-  StickCP2.Speaker.tone(1500, 40);
+void playHackerSound(int freq = 1200, int duration = 80) {
+  StickCP2.Speaker.tone(freq, duration);
+  delay(duration);
   StickCP2.Speaker.end();
 }
 
@@ -102,16 +101,49 @@ void checkNetwatchEasterEgg() {
 
 void drawBatteryStatus() {
   int batteryLevel = M5.Power.getBatteryLevel();
-  M5.Lcd.setTextColor(batteryLevel > 30 ? MATRIX_GREEN : GLITCH_RED);
+  
+  // Garante que o nível está entre 0-100%
+  batteryLevel = constrain(batteryLevel, 0, 100);
+  
+  // Configura cores baseadas no nível
+  uint16_t textColor, barColor;
+    if (batteryLevel <= 20 && !lowBatteryWarningShown) {
+    M5.Lcd.fillScreen(TFT_BLACK);
+    M5.Lcd.setTextColor(GLITCH_RED);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setCursor(10, 20);
+    typeWriter("> CRITICAL POWER LEVEL!\n", GLITCH_RED);
+    typeWriter("> SYSTEM SHUTDOWN IMMINENT\n", GLITCH_RED);
+    
+    for (int i = 0; i < 3; i++) {
+      playHackerSound(300, 200);
+      delay(300);
+    }
+    lowBatteryWarningShown = true;
+    delay(1000);
+    drawMainUI();
+    return;
+
+  } else if (batteryLevel <= 40) {
+    textColor = WARNING_YELLOW;
+    barColor = WARNING_YELLOW;
+  } else {
+    textColor = MATRIX_GREEN;
+    barColor = MATRIX_GREEN;
+  }
+  
+  // Exibe porcentagem
+  M5.Lcd.setTextColor(textColor);
   M5.Lcd.setCursor(5, 60);
-  M5.Lcd.printf("POWER: %d%% [%s]", batteryLevel, 
-               M5.Power.isCharging() ? "CHARGING" : "DISCHARGING");
+  M5.Lcd.printf("BAT: %d%%", batteryLevel);
   
   // Barra de bateria estilizada
   int barWidth = map(batteryLevel, 0, 100, 0, 50);
   M5.Lcd.drawRect(60, 60, 52, 8, TERMINAL_CYAN);
-  M5.Lcd.fillRect(62, 62, barWidth, 4, 
-                 batteryLevel > 30 ? MATRIX_GREEN : GLITCH_RED);
+  M5.Lcd.fillRect(62, 62, barWidth, 4, barColor);
+  
+  // Ícone de bateria
+  M5.Lcd.fillRect(115, 62, 3, 4, TERMINAL_CYAN);
 }
 
 void drawMainUI() {
@@ -139,10 +171,9 @@ void drawMainUI() {
   // Relógio e assinatura
   M5.Lcd.setTextColor(TERMINAL_CYAN);
   M5.Lcd.setCursor(5, M5.Lcd.height() - 15);
-  M5.Lcd.printf("%02d:%02d:%02d", 
+  M5.Lcd.printf("%02d:%02d", 
     M5.Rtc.getTime().hours, 
-    M5.Rtc.getTime().minutes,
-    M5.Rtc.getTime().seconds);
+    M5.Rtc.getTime().minutes);
   
   M5.Lcd.setTextColor(NEON_PURPLE);
   M5.Lcd.setCursor(M5.Lcd.width() - 60, M5.Lcd.height() - 15);
